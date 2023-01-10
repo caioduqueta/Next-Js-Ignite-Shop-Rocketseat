@@ -4,6 +4,9 @@ import Stripe from 'stripe'
 import { stripe } from '../../lib/stripe'
 import { ImageContainer, ProductContainer, ProductDetails } from '../../styles/pages/product'
 import Image from 'next/image'
+import axios from 'axios'
+import { useState } from 'react'
+import Head from 'next/head'
 
 interface ProductProps {
   product: {
@@ -12,30 +15,56 @@ interface ProductProps {
     imageUrl: string
     price: string
     description: string
+    defaultPriceId: string
   }
 }
 
-export default function Product({product}: ProductProps) {
+export default function Product({ product }: ProductProps) {
+
+  const [isCreatingCheckoutSession, setIsCreatingCheckoutSession] = useState(false)
+  async function handleBuyProduct() {
+    try {
+       setIsCreatingCheckoutSession(true)
+      const response = await axios.post('/api/checkout', {
+        priceId: product.defaultPriceId
+      })
+
+      const { checkoutUrl } = response.data;
+      window.location.href = checkoutUrl
+    } catch (err) {
+        setIsCreatingCheckoutSession(false)
+      // conectar com uma ferramenta de observabilidade (DataDog / Sentry)
+      alert('Falha ao redirecionar ao Checkout')
+    }
+  }
 
   const { isFallback } = useRouter()
   
   if (isFallback) { 
-    return
+    return <p>Loading</p>
   }
 
   return (
-    <ProductContainer>
-      <ImageContainer>
-        <Image src={product.imageUrl} width={520} height={480} alt="" />
-      </ImageContainer>
-      <ProductDetails>
-        <h1>{product.name}</h1>
-        <span>{product.price}</span>
+    <>
+      <Head>
+        <title> {product.name} | Ignite Shop</title>
+      </Head>
 
-        <p>{product.description}</p>
-        <button>Comprar Agora</button>
-      </ProductDetails>
-    </ProductContainer>
+      <ProductContainer>
+        <ImageContainer>
+          <Image src={product.imageUrl} width={520} height={480} alt="" />
+        </ImageContainer>
+        <ProductDetails>
+          <h1>{product.name}</h1>
+          <span>{product.price}</span>
+
+          <p>{product.description}</p>
+          <button onClick={handleBuyProduct} disabled={isCreatingCheckoutSession}>
+            Comprar Agora
+          </button>
+        </ProductDetails>
+      </ProductContainer>
+    </>
   )
 }
 
@@ -71,6 +100,7 @@ const price = product.default_price as Stripe.Price
           currency: 'BRL',
         }).format(price.unit_amount! / 100),
         description: product.description,
+        defaultPriceId: price.id,
       }
     },
     revalidate: 60 * 60 * 1, //1 hour
